@@ -8,7 +8,9 @@ public class SENaturalBloomAndDirtyLensEditor : Editor
 	SerializedObject serObj;
 
 	SerializedProperty bloomIntensity;
+	SerializedProperty bloomScatterFactor;
 	SerializedProperty lensDirtIntensity;
+	SerializedProperty lensDirtScatterFactor;
 	SerializedProperty lensDirtTexture;
 	SerializedProperty lowQuality;
 	SerializedProperty depthBlending;
@@ -23,7 +25,9 @@ public class SENaturalBloomAndDirtyLensEditor : Editor
 	{
 		serObj = new SerializedObject(target);
 		bloomIntensity = serObj.FindProperty("bloomIntensity");
+		bloomScatterFactor = serObj.FindProperty("bloomScatterFactor");
 		lensDirtIntensity = serObj.FindProperty("lensDirtIntensity");
+		lensDirtScatterFactor = serObj.FindProperty("lensDirtScatterFactor");
 		lensDirtTexture = serObj.FindProperty("lensDirtTexture");
 		lowQuality = serObj.FindProperty("lowQuality");
 		depthBlending = serObj.FindProperty("depthBlending");
@@ -46,7 +50,9 @@ public class SENaturalBloomAndDirtyLensEditor : Editor
 		}
 
 		EditorGUILayout.PropertyField(bloomIntensity, new GUIContent("Bloom Intensity", "The amount of light that is scattered inside the lens uniformly. Increase this value for a more drastic bloom."));
+		EditorGUILayout.PropertyField(bloomScatterFactor, new GUIContent("Bloom Scatter Factor", "Affects the scattering appeariance/tightness of bloom."));
 		EditorGUILayout.PropertyField(lensDirtIntensity, new GUIContent("Lens Dirt Intensity", "The amount that the lens dirt texture contributes to light scattering. Increase this value for a dirtier lens."));
+		EditorGUILayout.PropertyField(lensDirtScatterFactor, new GUIContent("Lens Dirt Scatter Factor", "Affects the scattering appeariance/tightness of lens dirt bloom."));
 		EditorGUILayout.PropertyField(lensDirtTexture, new GUIContent("Lens Dirt Texture", "The texture that controls per-channel light scattering amount. Black pixels do not affect light scattering. The brighter the pixel, the more light that is scattered."));
 		EditorGUILayout.PropertyField(lowQuality, new GUIContent("Low Quality", "Enable this for lower quality in exchange for faster rendering."));
 
@@ -57,7 +63,7 @@ public class SENaturalBloomAndDirtyLensEditor : Editor
 			EditorGUILayout.PropertyField(depthBlendFunction, new GUIContent("Blend Function", "Depth-based blend function."));
 			EditorGUILayout.PropertyField(depthBlendFactor, new GUIContent("Blend Factor", "Depth-based blend factor. Higher values mean bloom is blended more aggressively."));
 			EditorGUILayout.PropertyField(maxDepthBlendFactor, new GUIContent("Max Depth Blend", "The maximum blend factor for Depth Blending. Lower this to clamp the maximum allowed blend factor."));
-			EditorGUILayout.PropertyField(depthScatterFactor, new GUIContent("Depth Scatter Factor", "Affects the scattering appearance of depth-blended bloom."));
+			EditorGUILayout.PropertyField(depthScatterFactor, new GUIContent("Depth Scatter Factor", "Affects the scattering appearance/tightness of depth-blended bloom."));
 
 		}
 

@@ -6,19 +6,26 @@ using System.Collections;
 [AddComponentMenu("Image Effects/Sonic Ether/SE Natural Bloom and Dirty Lens")]
 public class SENaturalBloomAndDirtyLens : MonoBehaviour
 {
-	[Range(0.0f, 0.4f)]
-	public float bloomIntensity = 0.05f;
-
+	
 	public Shader shader;
 	private Material material;
-
-	public Texture2D lensDirtTexture;
+	private bool isSupported;
+	private float blurSize = 4.0f;
+	Camera cam;
+	
+	
+	
+	[Range(0.0f, 0.4f)]
+	public float bloomIntensity = 0.05f;
+	[Range(0.0f, 1.0f)]
+	public float bloomScatterFactor = 0.5f;
+	[Range(0.0f, 1.0f)]
+	public float lensDirtScatterFactor = 0.5f;
 	[Range(0.0f, 0.95f)]
 	public float lensDirtIntensity = 0.05f;
+	public Texture2D lensDirtTexture;
 
-	private bool isSupported;
 
-	private float blurSize = 4.0f;
 
 	public enum DepthBlendFunction
 	{
@@ -26,7 +33,6 @@ public class SENaturalBloomAndDirtyLens : MonoBehaviour
 		ExponentialSquared
 	};
 
-	Camera cam;
 
 	public bool inputIsHDR;
 	public bool lowQuality = false;
@@ -84,6 +90,8 @@ public class SENaturalBloomAndDirtyLens : MonoBehaviour
 		material.SetFloat("_DepthBlendFactor", depthBlending ? Mathf.Pow(depthBlendFactor, 2.0f) : 0.0f);
 		material.SetFloat("_MaxDepthBlendFactor", maxDepthBlendFactor);
 		material.SetFloat("_DepthScatterFactor", depthScatterFactor * 4.0f - 1.0f);
+		material.SetFloat("_BloomScatterFactor", bloomScatterFactor * 5.0f - 2.5f);
+		material.SetFloat("_LensDirtScatterFactor", lensDirtScatterFactor * 5.0f - 2.5f);
 		material.SetInt("_DepthBlendFunction", depthBlendFunction == DepthBlendFunction.Exponential ? 0 : 1);
 		material.SetMatrix("ProjectionMatrixInverse", cam.projectionMatrix.inverse);
 

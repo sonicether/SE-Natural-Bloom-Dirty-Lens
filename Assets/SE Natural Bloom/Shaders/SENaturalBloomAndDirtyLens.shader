@@ -39,6 +39,8 @@ Shader "Hidden/SENaturalBloomAndDirtyLens" {
 		uniform float _DepthBlendFactor;
 		uniform float _MaxDepthBlendFactor;
 		uniform float _DepthScatterFactor;
+		uniform float _BloomScatterFactor;
+		uniform float _LensDirtScatterFactor;
 		uniform int _DepthBlendFunction;
 		
 		float4x4 ProjectionMatrixInverse;
@@ -128,6 +130,7 @@ Shader "Hidden/SENaturalBloomAndDirtyLens" {
 			float4 color = tex2D(_MainTex, coord);
 			float3 origColor = color.rgb;
 			fixed3 lens = tex2D(_LensDirt, coord).rgb;
+			float lensLum = dot(lens, Fixed3(0.33333));
 			
 			float4 b0s = tex2D(_Bloom0, coord);
 			float4 b1s = tex2D(_Bloom1, coord);
@@ -164,27 +167,27 @@ Shader "Hidden/SENaturalBloomAndDirtyLens" {
 			// Various bloom type weights (for each bloom "octave")
 			float bloomWeights[8] =
 			{
-				1.7,
-				1.0,
-				0.6,
-				0.45,
-				0.35,
-				0.23,
-				0.13,
-				0.08
+				pow(1.0, _BloomScatterFactor),
+				pow(2.0, _BloomScatterFactor),
+				pow(3.0, _BloomScatterFactor),
+				pow(4.0, _BloomScatterFactor),
+				pow(5.0, _BloomScatterFactor),
+				pow(6.0, _BloomScatterFactor),
+				pow(7.0, _BloomScatterFactor),
+				pow(8.0, _BloomScatterFactor)
 			};
 			const float bloomWeightsInvTotal = 1.0 / (bloomWeights[0] + bloomWeights[1] + bloomWeights[2] + bloomWeights[3] + bloomWeights[4] + bloomWeights[5] + bloomWeights[6] + bloomWeights[7]);
 
 			float lensDirtBloomWeights[8] =
 			{
-				1.7,
-				1.0,
-				0.6,
-				0.45,
-				0.35,
-				0.23,
-				0.13,
-				0.08
+				pow(1.0, _LensDirtScatterFactor),
+				pow(2.0, _LensDirtScatterFactor),
+				pow(3.0, _LensDirtScatterFactor),
+				pow(4.0, _LensDirtScatterFactor),
+				pow(5.0, _LensDirtScatterFactor),
+				pow(6.0, _LensDirtScatterFactor),
+				pow(7.0, _LensDirtScatterFactor),
+				pow(8.0, _LensDirtScatterFactor)
 			};
 			const float lensDirtBloomWeightsInvTotal = 1.0 / (lensDirtBloomWeights[0] + lensDirtBloomWeights[1] + lensDirtBloomWeights[2] + lensDirtBloomWeights[3] + lensDirtBloomWeights[4] + lensDirtBloomWeights[5] + lensDirtBloomWeights[6] + lensDirtBloomWeights[7]);
 			
