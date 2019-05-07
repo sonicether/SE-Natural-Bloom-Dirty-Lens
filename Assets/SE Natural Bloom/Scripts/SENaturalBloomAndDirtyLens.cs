@@ -31,10 +31,14 @@ public class SENaturalBloomAndDirtyLens : MonoBehaviour
 	public bool inputIsHDR;
 	public bool lowQuality = false;
 
-	public bool depthBloom = true;
+	public bool depthBlending = false;
 	public DepthBlendFunction depthBlendFunction = DepthBlendFunction.Exponential;
 	[Range(0.0f, 1.0f)]
 	public float depthBlendFactor = 0.1f;
+	[Range(0.0f, 1.0f)]
+	public float maxDepthBlendFactor = 1.0f;
+	[Range(0.0f, 1.0f)]
+	public float depthScatterFactor = 0.5f;
 
 	void OnEnable() 
 	{
@@ -79,7 +83,10 @@ public class SENaturalBloomAndDirtyLens : MonoBehaviour
 
 		material.SetFloat("_BloomIntensity", Mathf.Exp(bloomIntensity) - 1.0f);
 		material.SetFloat("_LensDirtIntensity", Mathf.Exp(lensDirtIntensity) - 1.0f);
-		material.SetFloat("_DepthBlendFactor", depthBloom ? Mathf.Pow(depthBlendFactor, 2.0f) : 0.0f);
+		material.SetFloat("_DepthBlendFactor", depthBlending ? Mathf.Pow(depthBlendFactor, 2.0f) : 0.0f);
+		material.SetFloat("_MaxDepthBlendFactor", maxDepthBlendFactor);
+		// material.SetFloat("_DepthScatterFactor", Mathf.Pow(2.0f * depthScatterFactor, 2.0f) + 0.00001f);
+		material.SetFloat("_DepthScatterFactor", depthScatterFactor * 4.0f - 1.0f);
 		material.SetInt("_DepthBlendFunction", depthBlendFunction == DepthBlendFunction.Exponential ? 0 : 1);
 		material.SetMatrix("ProjectionMatrixInverse", cam.projectionMatrix.inverse);
 

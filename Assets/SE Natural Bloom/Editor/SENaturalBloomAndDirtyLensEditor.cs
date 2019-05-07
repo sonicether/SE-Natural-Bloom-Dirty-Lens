@@ -11,9 +11,11 @@ public class SENaturalBloomAndDirtyLensEditor : Editor
 	SerializedProperty lensDirtIntensity;
 	SerializedProperty lensDirtTexture;
 	SerializedProperty lowQuality;
-	SerializedProperty depthBloom;
+	SerializedProperty depthBlending;
 	SerializedProperty depthBlendFunction;
 	SerializedProperty depthBlendFactor;
+	SerializedProperty maxDepthBlendFactor;
+	SerializedProperty depthScatterFactor;
 
 	SENaturalBloomAndDirtyLens instance;
 
@@ -24,9 +26,11 @@ public class SENaturalBloomAndDirtyLensEditor : Editor
 		lensDirtIntensity = serObj.FindProperty("lensDirtIntensity");
 		lensDirtTexture = serObj.FindProperty("lensDirtTexture");
 		lowQuality = serObj.FindProperty("lowQuality");
-		depthBloom = serObj.FindProperty("depthBloom");
+		depthBlending = serObj.FindProperty("depthBlending");
 		depthBlendFunction = serObj.FindProperty("depthBlendFunction");
 		depthBlendFactor = serObj.FindProperty("depthBlendFactor");
+		maxDepthBlendFactor = serObj.FindProperty("maxDepthBlendFactor");
+		depthScatterFactor = serObj.FindProperty("depthScatterFactor");
 
 		instance = (SENaturalBloomAndDirtyLens)target;		
 	}
@@ -47,11 +51,13 @@ public class SENaturalBloomAndDirtyLensEditor : Editor
 		EditorGUILayout.PropertyField(lowQuality, new GUIContent("Low Quality", "Enable this for lower quality in exchange for faster rendering."));
 
 		EditorGUILayout.Space();
-		EditorGUILayout.PropertyField(depthBloom, new GUIContent("Depth Blending", "Enable depth-based bloom blending (useful for fog)."));
-		if (depthBloom.boolValue)
+		EditorGUILayout.PropertyField(depthBlending, new GUIContent("Depth Blending", "Enable depth-based bloom blending (useful for fog)."));
+		if (depthBlending.boolValue)
 		{
 			EditorGUILayout.PropertyField(depthBlendFunction, new GUIContent("Blend Function", "Depth-based blend function."));
 			EditorGUILayout.PropertyField(depthBlendFactor, new GUIContent("Blend Factor", "Depth-based blend factor. Higher values mean bloom is blended more aggressively."));
+			EditorGUILayout.PropertyField(maxDepthBlendFactor, new GUIContent("Max Depth Blend", "The maximum blend factor for Depth Blending. Lower this to clamp the maximum allowed blend factor."));
+			EditorGUILayout.PropertyField(depthScatterFactor, new GUIContent("Depth Scatter Factor", "Affects the scattering appearance of depth-blended bloom."));
 
 		}
 

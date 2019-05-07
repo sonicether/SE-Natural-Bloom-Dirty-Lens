@@ -1,4 +1,6 @@
-﻿Shader "Hidden/SENaturalBloomAndDirtyLens" {
+﻿// Upgrade NOTE: replaced 'mul(UNITY_MATRIX_MVP,*)' with 'UnityObjectToClipPos(*)'
+
+Shader "Hidden/SENaturalBloomAndDirtyLens" {
 	Properties {
 		_MainTex ("Base (RGB)", 2D) = "white" {}
 		_Bloom0 ("Bloom0 (RGB)", 2D) = "black" {}
@@ -35,6 +37,8 @@
 		uniform float _BloomIntensity;
 		uniform float _LensDirtIntensity;
 		uniform float _DepthBlendFactor;
+		uniform float _MaxDepthBlendFactor;
+		uniform float _DepthScatterFactor;
 		uniform int _DepthBlendFunction;
 		
 		float4x4 ProjectionMatrixInverse;
@@ -53,7 +57,7 @@
 		{
 			v2f_simple o;
 			
-			o.pos = mul (UNITY_MATRIX_MVP, v.vertex);
+			o.pos = UnityObjectToClipPos (v.vertex);
         	o.uv = float4(v.texcoord.xy, 1, 1);		
         	
         	#if UNITY_UV_STARTS_AT_TOP
@@ -78,6 +82,10 @@
 		float4 GetViewSpacePosition(float2 coord)
 		{
 			float depth = tex2Dlod(_CameraDepthTexture, float4(coord.x, coord.y, 0.0, 0.0)).x;
+			
+			#if defined(UNITY_REVERSED_Z)
+			depth = 1.0 - depth;
+			#endif
 
 			float4 viewPosition = mul(ProjectionMatrixInverse, float4(coord.x * 2.0 - 1.0, coord.y * 2.0 - 1.0, 2.0 * depth - 1.0, 1.0));
 			viewPosition /= viewPosition.w;
@@ -99,22 +107,24 @@
 			//return depth - Luminance(color.rgb) * 0.01;
 		}
 
-		float FogFix(float fogDepth, float depth, inout float fogWeightAccum)
+		float FogFix(float blurredFogFactor, float fogFactor, inout float fogWeightAccum)
 		{
 			//return 1.0;
-			float weight = saturate(1.0 - pow(max(0.0, depth - fogDepth) * 0.90, 1.0));
+			float weight = saturate(1.0 - pow(max(0.0, fogFactor - blurredFogFactor) * 0.99, 1.0));
 			fogWeightAccum += weight;
 			return weight;
 		}
 
 		
-		float4 fragBloom ( v2f_simple i ) : COLOR
+		float4 fragBlendBloomWithScene ( v2f_simple i ) : COLOR
 		{	
         	#if UNITY_UV_STARTS_AT_TOP
 				float2 coord = i.uv2.xy;
 			#else
 				float2 coord = i.uv.xy;
 			#endif
+			
+			// Get various source textures
 			float4 color = tex2D(_MainTex, coord);
 			float3 origColor = color.rgb;
 			fixed3 lens = tex2D(_LensDirt, coord).rgb;
@@ -137,20 +147,21 @@
 			fixed3 b6 = b6s.rgb;
 			fixed3 b7 = b7s.rgb;
 
-			float depthexp = tex2D(_CameraDepthTexture, coord).x;
-			float depth = Linear01Depth(depthexp);
+			float depthp = tex2D(_CameraDepthTexture, coord).x;
+			float depth = Linear01Depth(depthp);
 
-			float depth0 = (DecDepth(b0s.a, b0s.rgb));
-			float depth1 = (DecDepth(b1s.a, b1s.rgb));
-			float depth2 = (DecDepth(b2s.a, b2s.rgb));
-			float depth3 = (DecDepth(b3s.a, b3s.rgb));
-			float depth4 = (DecDepth(b4s.a, b4s.rgb));
-			float depth5 = (DecDepth(b5s.a, b5s.rgb));
-			float depth6 = (DecDepth(b6s.a, b6s.rgb));
-			float depth7 = (DecDepth(b7s.a, b7s.rgb));
+			float blurredFogFactor0 = (DecDepth(b0s.a, b0s.rgb));
+			float blurredFogFactor1 = (DecDepth(b1s.a, b1s.rgb));
+			float blurredFogFactor2 = (DecDepth(b2s.a, b2s.rgb));
+			float blurredFogFactor3 = (DecDepth(b3s.a, b3s.rgb));
+			float blurredFogFactor4 = (DecDepth(b4s.a, b4s.rgb));
+			float blurredFogFactor5 = (DecDepth(b5s.a, b5s.rgb));
+			float blurredFogFactor6 = (DecDepth(b6s.a, b6s.rgb));
+			float blurredFogFactor7 = (DecDepth(b7s.a, b7s.rgb));
 			
-//			return float4(b0.rgb, 1.0);
 			
+			
+			// Various bloom type weights (for each bloom "octave")
 			float bloomWeights[8] =
 			{
 				1.7,
@@ -162,9 +173,21 @@
 				0.13,
 				0.08
 			};
-			const float bloomNorm = 1.0 / (bloomWeights[0] + bloomWeights[1] + bloomWeights[2] + bloomWeights[3] + bloomWeights[4] + bloomWeights[5] + bloomWeights[6] + bloomWeights[7]);
+			const float bloomWeightsInvTotal = 1.0 / (bloomWeights[0] + bloomWeights[1] + bloomWeights[2] + bloomWeights[3] + bloomWeights[4] + bloomWeights[5] + bloomWeights[6] + bloomWeights[7]);
 
-
+			float lensDirtBloomWeights[8] =
+			{
+				1.7,
+				1.0,
+				0.6,
+				0.45,
+				0.35,
+				0.23,
+				0.13,
+				0.08
+			};
+			const float lensDirtBloomWeightsInvTotal = 1.0 / (lensDirtBloomWeights[0] + lensDirtBloomWeights[1] + lensDirtBloomWeights[2] + lensDirtBloomWeights[3] + lensDirtBloomWeights[4] + lensDirtBloomWeights[5] + lensDirtBloomWeights[6] + lensDirtBloomWeights[7]);
+			
 			float fogBloomWeights[8] =
 			{
 				0.1,
@@ -177,34 +200,11 @@
 				0.00
 			};
 
-			float lensBloomWeights[8] =
-			{
-				1.7,
-				1.0,
-				0.6,
-				0.45,
-				0.35,
-				0.23,
-				0.13,
-				0.08
-			};
-			const float lensBloomNorm = 1.0 / (lensBloomWeights[0] + lensBloomWeights[1] + lensBloomWeights[2] + lensBloomWeights[3] + lensBloomWeights[4] + lensBloomWeights[5] + lensBloomWeights[6] + lensBloomWeights[7]);
-			
-			fixed3 bloom	= b0 * bloomWeights[0]
-							+ b1 * bloomWeights[1]
-							+ b2 * bloomWeights[2]
-							+ b3 * bloomWeights[3]
-							+ b4 * bloomWeights[4]
-							+ b5 * bloomWeights[5]
-							+ b6 * bloomWeights[6]
-							+ b7 * bloomWeights[7]
-							;
-			bloom *= bloomNorm;
 
 
-
-			//Fog blending
-			float fogFactor = 0.0f;
+			// Fog blending. Use encoded blurred fog factors and compare them with a per-pixel fog factor here to fix issues 
+			// with bright foreground objects causing distant fog bloom. Then update each fog bloom weight accordingly
+			float fogFactor = 0.0;
 			float3 viewPos = GetViewSpacePosition(coord.xy).xyz;
 			float dist = length(viewPos);
 
@@ -216,34 +216,37 @@
 			{
 				fogFactor = pow(1.0 - exp(-dist * _DepthBlendFactor), 2.0);
 			}
+			
+			fogFactor = min(fogFactor, _MaxDepthBlendFactor);
 
-			float compare = fogFactor;
-			float weightSum = 0.0f;
-			//float3 fb0 = b0 * FogFix(depth0, compare, weightSum);
-			//float3 fb1 = b1 * FogFix(depth1, compare, weightSum);
-			//float3 fb2 = b2 * FogFix(depth2, compare, weightSum);
-			//float3 fb3 = b3 * FogFix(depth3, compare, weightSum);
-			//float3 fb4 = b4 * FogFix(depth4, compare, weightSum);
-			//float3 fb5 = b5 * FogFix(depth5, compare, weightSum);
-			//float3 fb6 = b6 * FogFix(depth6, compare, weightSum);
-			//float3 fb7 = b7 * FogFix(depth7, compare, weightSum);
-			fogBloomWeights[0] *= FogFix(depth0, compare, weightSum);
-			fogBloomWeights[1] *= FogFix(depth1, compare, weightSum);
-			fogBloomWeights[2] *= FogFix(depth2, compare, weightSum);
-			fogBloomWeights[3] *= FogFix(depth3, compare, weightSum);
-			fogBloomWeights[4] *= FogFix(depth4, compare, weightSum);
-			fogBloomWeights[5] *= FogFix(depth5, compare, weightSum);
-			fogBloomWeights[6] *= FogFix(depth6, compare, weightSum);
-			fogBloomWeights[7] *= FogFix(depth7, compare, weightSum);
+			float weightSum = 0.0;
+			
+			fogBloomWeights[0] *= FogFix(blurredFogFactor0, fogFactor, weightSum) * pow(1.0, _DepthScatterFactor);
+			fogBloomWeights[1] *= FogFix(blurredFogFactor1, fogFactor, weightSum) * pow(2.0, _DepthScatterFactor);
+			fogBloomWeights[2] *= FogFix(blurredFogFactor2, fogFactor, weightSum) * pow(3.0, _DepthScatterFactor);
+			fogBloomWeights[3] *= FogFix(blurredFogFactor3, fogFactor, weightSum) * pow(4.0, _DepthScatterFactor);
+			fogBloomWeights[4] *= FogFix(blurredFogFactor4, fogFactor, weightSum) * pow(5.0, _DepthScatterFactor);
+			fogBloomWeights[5] *= FogFix(blurredFogFactor5, fogFactor, weightSum) * pow(6.0, _DepthScatterFactor);
+			fogBloomWeights[6] *= FogFix(blurredFogFactor6, fogFactor, weightSum) * pow(7.0, _DepthScatterFactor);
+			fogBloomWeights[7] *= FogFix(blurredFogFactor7, fogFactor, weightSum) * pow(8.0, _DepthScatterFactor);
 
-			const float fogBloomCurve = 0.0;
+			const float fogBloomWeightsInvTotal = 1.0 / (fogBloomWeights[0] + fogBloomWeights[1] + fogBloomWeights[2] + fogBloomWeights[3] + fogBloomWeights[4] + fogBloomWeights[5] + fogBloomWeights[6] + fogBloomWeights[7]);
 
-			for (int i = 0; i < 8; i++)
-			{
-				fogBloomWeights[i] *= pow(i + 2, fogBloomCurve);
-			}
 
-			const float fogBloomNorm = 1.0 / (fogBloomWeights[0] + fogBloomWeights[1] + fogBloomWeights[2] + fogBloomWeights[3] + fogBloomWeights[4] + fogBloomWeights[5] + fogBloomWeights[6] + fogBloomWeights[7]);
+
+
+			// Sum up bloom octaves for each type based on weights
+			fixed3 bloom	= b0 * bloomWeights[0]
+							+ b1 * bloomWeights[1]
+							+ b2 * bloomWeights[2]
+							+ b3 * bloomWeights[3]
+							+ b4 * bloomWeights[4]
+							+ b5 * bloomWeights[5]
+							+ b6 * bloomWeights[6]
+							+ b7 * bloomWeights[7]
+							;
+			bloom *= bloomWeightsInvTotal;
+
 
 			fixed3 fogBloom = b0 * fogBloomWeights[0]
 							+ b1 * fogBloomWeights[1]
@@ -254,58 +257,29 @@
 							+ b6 * fogBloomWeights[6]
 							+ b7 * fogBloomWeights[7]
 							;
-			fogBloom *= fogBloomNorm;
-			//fogBloom /= weightSum;
+			fogBloom *= fogBloomWeightsInvTotal;
 			
-			fixed3 lensBloom = b0 * lensBloomWeights[0]
-							+ b1 * lensBloomWeights[1]
-							+ b2 * lensBloomWeights[2]
-							+ b3 * lensBloomWeights[3]
-							+ b4 * lensBloomWeights[4]
-							+ b5 * lensBloomWeights[5]
-							+ b6 * lensBloomWeights[6]
-							+ b7 * lensBloomWeights[7]
-							;
-			lensBloom *= lensBloomNorm;
-
-
-			float bloomBlendFactor = _BloomIntensity;
-			color.rgb = lerp(color.rgb, bloom.rgb, Fixed3(bloomBlendFactor));
-
-
 			
-
-			//color.rgb *= 1.0 - fogFactor;
-
-
-			/*
-			{
-				color.rgb *= 0.2;
-				//color.rgb *= 1.0 - fogFactor;
-				//color.rgb *= 0.1;
-				color.rgb += lerp(origColor, b0s.rgb, min(fogFactor, b0s.a * 4.0)) * fogBloomWeights[0];
-				color.rgb += lerp(origColor, b1s.rgb, min(fogFactor, b1s.a * 4.0)) * fogBloomWeights[1];
-				color.rgb += lerp(origColor, b2s.rgb, min(fogFactor, b2s.a * 4.0)) * fogBloomWeights[2];
-				color.rgb += lerp(origColor, b3s.rgb, min(fogFactor, b3s.a * 4.0)) * fogBloomWeights[3];
-				color.rgb += lerp(origColor, b4s.rgb, min(fogFactor, b4s.a * 4.0)) * fogBloomWeights[4];
-				color.rgb += lerp(origColor, b5s.rgb, min(fogFactor, b5s.a * 4.0)) * fogBloomWeights[5];
-				color.rgb += lerp(origColor, b6s.rgb, min(fogFactor, b6s.a * 4.0)) * fogBloomWeights[6];
-				color.rgb += lerp(origColor, b7s.rgb, min(fogFactor, b7s.a * 4.0)) * fogBloomWeights[7];
-			}
-			*/
+			fixed3 lensDirtBloom 	= b0 * lensDirtBloomWeights[0]
+									+ b1 * lensDirtBloomWeights[1]
+									+ b2 * lensDirtBloomWeights[2]
+									+ b3 * lensDirtBloomWeights[3]
+									+ b4 * lensDirtBloomWeights[4]
+									+ b5 * lensDirtBloomWeights[5]
+									+ b6 * lensDirtBloomWeights[6]
+									+ b7 * lensDirtBloomWeights[7]
+									;
+			lensDirtBloom *= lensDirtBloomWeightsInvTotal;
 
 
 
+
+			// Blend various blooms with the main color
+			color.rgb = lerp(color.rgb, bloom.rgb, Fixed3(_BloomIntensity));
+			color.rgb = lerp(color.rgb, lensDirtBloom.rgb, saturate(lens.rgb * _LensDirtIntensity));
 			color.rgb = lerp(color.rgb, fogBloom.rgb, Fixed3(fogFactor));
-
-
-
-
-			color.r = lerp(color.r, lensBloom.r, (saturate(lens.r * _LensDirtIntensity)));
-			color.g = lerp(color.g, lensBloom.g, (saturate(lens.g * _LensDirtIntensity)));
-			color.b = lerp(color.b, lensBloom.b, (saturate(lens.b * _LensDirtIntensity)));
 			
-//			//lens stuff
+//			// Lens flare stuff. Not very good, just uncomment this block if you want to try it out
 //			float2 lensCoord0 = 1.0 - coord.xy;
 //			float2 lensCoord1 = (((lensCoord0 * 2.0 - 1.0) / 1.9) * 0.5 + 0.5);
 //			float2 lensCoord2 = (((lensCoord0 * 2.0 - 1.0) / 1.3) * 0.5 + 0.5);
@@ -329,18 +303,6 @@
 //			color.rgb += tex2D(_Bloom1, lensCoord8).rgb * 0.2 * 0.0007f;
 //			color.rgb += tex2D(_Bloom1, lensCoord9).rgb * 0.2 * 0.0007f;
 //			color.rgb += tex2D(_Bloom1, lensCoord10).rgb * 0.2 * 0.0007f;
-
-			//color.rgb += bloom;
-
-			//color.rgb = depth4.xxx;
-
-
-			/*
-
-			float fogBlend = fogFactor * saturate(1.0 - max(0.0, compare - depth4) * 0.70);
-
-			color.rgb = lerp(color.rgb, b4.rgb, fogBlend);
-			*/
 
 			return color;
 		} 
@@ -379,7 +341,7 @@
 			
 			bloom *= 0.3401f;
 			
-			fixed3 lensBloom = b0 * 1.0f 
+			fixed3 lensDirtBloom = b0 * 1.0f 
 							 + b1 * 0.8f 
 							 + b2 * 0.6f 
 							 + b3 * 0.45f 
@@ -388,12 +350,12 @@
 //							 + b6 * 0.13f
 //							 + b7 * 0.08f
 							 ;
-			lensBloom *= 0.2747f;
+			lensDirtBloom *= 0.2747f;
 			
 			color.rgb = lerp(color.rgb, bloom.rgb, Fixed3(_BloomIntensity));
-			color.r = lerp(color.r, lensBloom.r, (saturate(lens.r * _LensDirtIntensity)));
-			color.g = lerp(color.g, lensBloom.g, (saturate(lens.g * _LensDirtIntensity)));
-			color.b = lerp(color.b, lensBloom.b, (saturate(lens.b * _LensDirtIntensity)));
+			color.r = lerp(color.r, lensDirtBloom.r, (saturate(lens.r * _LensDirtIntensity)));
+			color.g = lerp(color.g, lensDirtBloom.g, (saturate(lens.g * _LensDirtIntensity)));
+			color.b = lerp(color.b, lensDirtBloom.b, (saturate(lens.b * _LensDirtIntensity)));
 
 			//color.rgb += bloom;
 			return color;
@@ -413,7 +375,7 @@
 		{
 			v2f_tap o;
 
-			o.pos = mul (UNITY_MATRIX_MVP, v.vertex);
+			o.pos = UnityObjectToClipPos (v.vertex);
         	o.uv20 = float4(v.texcoord.xy + _MainTex_TexelSize.xy * float2(0.5h, 0.5h), 0.0, 0.0);				
 			o.uv21 = float4(v.texcoord.xy + _MainTex_TexelSize.xy * float2(-0.5h,-0.5h), 0.0, 0.0);	
 			o.uv22 = float4(v.texcoord.xy + _MainTex_TexelSize.xy * float2(0.5h,-0.5h), 0.0, 0.0);		
@@ -454,7 +416,7 @@
 		v2f_withBlurCoords8 vertBlurHorizontal (appdata_img v)
 		{
 			v2f_withBlurCoords8 o;
-			o.pos = mul (UNITY_MATRIX_MVP, v.vertex);
+			o.pos = UnityObjectToClipPos (v.vertex);
 			
 			o.uv = float4(v.texcoord.xy,1,1);
 //			o.offs = float4(_MainTex_TexelSize.xy * float2(1.0, 0.0) * _BlurSize,1,1);
@@ -466,7 +428,7 @@
 		v2f_withBlurCoords8 vertBlurVertical (appdata_img v)
 		{
 			v2f_withBlurCoords8 o;
-			o.pos = mul (UNITY_MATRIX_MVP, v.vertex);
+			o.pos = UnityObjectToClipPos (v.vertex);
 			
 			o.uv = float4(v.texcoord.xy,1,1);
 //			o.offs = float4(_MainTex_TexelSize.xy * float2(0.0, 1.0) * _BlurSize,1,1);
@@ -523,7 +485,7 @@
 			return color;
 		}
 		
-		float4 fragClamp ( v2f_simple i ) : COLOR
+		float4 fragClampSourceAndEncodeFogFactor ( v2f_simple i ) : COLOR
 		{
 			float4 color = float4(0.0, 0.0, 0.0, 1.0);
 			color.rgb = tex2D(_MainTex, i.uv.xy).rgb;
@@ -563,7 +525,7 @@
 		{
 			CGPROGRAM
 			#pragma vertex vertBloom
-			#pragma fragment fragBloom
+			#pragma fragment fragBlendBloomWithScene
 			#pragma fragmentoption ARB_precision_hint_fastest 
 			ENDCG
 		}
@@ -608,7 +570,7 @@
 		{
 			CGPROGRAM
 			#pragma vertex vertBloom
-			#pragma fragment fragClamp
+			#pragma fragment fragClampSourceAndEncodeFogFactor
 			#pragma fragmentoption ARB_precision_hint_fastest 
 			ENDCG
 		}
