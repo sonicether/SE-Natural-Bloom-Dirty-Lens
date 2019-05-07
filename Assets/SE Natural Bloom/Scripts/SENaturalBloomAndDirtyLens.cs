@@ -69,8 +69,6 @@ public class SENaturalBloomAndDirtyLens : MonoBehaviour
 			return;
 		}
 
-		//if (!material)
-		//	material = new Material(shader);
 
 		#if UNITY_EDITOR
 		if (source.format == RenderTextureFormat.ARGBHalf)
@@ -85,7 +83,6 @@ public class SENaturalBloomAndDirtyLens : MonoBehaviour
 		material.SetFloat("_LensDirtIntensity", Mathf.Exp(lensDirtIntensity) - 1.0f);
 		material.SetFloat("_DepthBlendFactor", depthBlending ? Mathf.Pow(depthBlendFactor, 2.0f) : 0.0f);
 		material.SetFloat("_MaxDepthBlendFactor", maxDepthBlendFactor);
-		// material.SetFloat("_DepthScatterFactor", Mathf.Pow(2.0f * depthScatterFactor, 2.0f) + 0.00001f);
 		material.SetFloat("_DepthScatterFactor", depthScatterFactor * 4.0f - 1.0f);
 		material.SetInt("_DepthBlendFunction", depthBlendFunction == DepthBlendFunction.Exponential ? 0 : 1);
 		material.SetMatrix("ProjectionMatrixInverse", cam.projectionMatrix.inverse);
@@ -103,15 +100,8 @@ public class SENaturalBloomAndDirtyLens : MonoBehaviour
 		RenderTexture downsampled;
 		downsampled = clampedSource;
 
-		/* 
-		material.SetTexture("COCK", clampedSource);
-		RenderTexture peen = RenderTexture.GetTemporary(rtWidth, rtHeight, 0, source.format);
-		Graphics.Blit(clampedSource, peen, material, 1);
-		material.SetTexture("PEEN", peen);
-		*/
 
 
-		float spread = 1.0f;
 		int iterations = 1;
 
 		int octaves = lowQuality ? 4 : 8;
@@ -124,23 +114,13 @@ public class SENaturalBloomAndDirtyLens : MonoBehaviour
 			Graphics.Blit(downsampled, rt, material, 1);
 
 
-			if (i > 1)
-				spread = 1.0f;
-			else
-				spread = 0.5f;
-
-			if (i == 2)
-				spread = 0.75f;
-
 			if (i >= 1)
 			{
 				iterations = 2;
 			}
 
-
 			for (int j = 0; j < iterations; j++)
 			{
-				material.SetFloat("_BlurSize", (blurSize * 0.5f + j) * spread);
 
 				//vertical blur
 				RenderTexture rt2 = RenderTexture.GetTemporary(rtWidth, rtHeight, 0, source.format);
@@ -194,12 +174,10 @@ public class SENaturalBloomAndDirtyLens : MonoBehaviour
 			rtHeight /= lowQuality ? 3 : 2;
 		}
 
-//		RenderTexture smear0 = RenderTexture.GetTemporary(source.width / 8, source.height / 8, 0, source.format);
 
 		material.SetTexture("_LensDirt", lensDirtTexture);
 		Graphics.Blit(clampedSource, destination, material, lowQuality ? 4 : 0);
 		RenderTexture.ReleaseTemporary(clampedSource);
 
-		//RenderTexture.ReleaseTemporary(peen);
 	}
 }
